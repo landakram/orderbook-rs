@@ -7,3 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+intrusive-collections = "0.9.0"
+rust_decimal = "1.8.1"
+rbtree = "0.1"
+uuid = { version = "0.5.1", features = ["serde", "v4"] }
