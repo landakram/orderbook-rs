@@ -63,6 +63,18 @@ impl PriceLevel {
 
         return None;
     }
+
+    pub fn len(&self) -> usize {
+        return self.orders.len();
+    }
+
+    pub fn front(&mut self) -> Option<&mut Order> {
+        return self.orders.front_mut();
+    }
+
+    pub fn back(&mut self) -> Option<&mut Order> {
+        return self.orders.back_mut();
+    }
 }
 
 #[derive(Debug)]
@@ -109,6 +121,26 @@ impl BookSide {
 
         return None;
     }
+
+    pub fn min_price_level(&self) -> Option<Rc<RefCell<PriceLevel>>> {
+        if self.depth > 0 {
+            if let Some((&_price, price_level)) = self.price_tree.get_first() {
+                return Some(price_level.clone());
+            }
+        }
+
+        return None;
+    }
+
+    pub fn max_price_level(&self) -> Option<Rc<RefCell<PriceLevel>>> {
+        if self.depth > 0 {
+            if let Some((&_price, price_level)) = self.price_tree.get_last() {
+                return Some(price_level.clone());
+            }
+        }
+
+        return None;
+    }
 }
 
 #[derive(Debug)]
@@ -118,11 +150,20 @@ struct OrderBook {
     asks: BookSide,
 }
 
-// #[derive(Debug)]
-// struct OrderResult {
-//     fills: Vec<Order>,
-//     quantityFilled,
-// }
+#[derive(Debug)]
+struct OrderResult {
+    done: Vec<Order>,
+    partial: Option<Order>,
+    quantityFilled: Decimal,
+}
+
+fn iterate_min(side: &BookSide) -> Option<Rc<RefCell<PriceLevel>>> {
+    return side.min_price_level();
+}
+
+fn iterate_max(side: &BookSide) -> Option<Rc<RefCell<PriceLevel>>> {
+    return side.max_price_level();
+}
 
 impl OrderBook {
     pub fn new() -> OrderBook {
@@ -133,7 +174,82 @@ impl OrderBook {
         };
     }
 
-    // pub fn submit_market_order(side: Side, quantity: Decimal) ->
+    pub fn submit_market_order(&mut self, side: Side, quantity: Decimal) -> OrderResult {
+        let iter: fn(&BookSide) -> Option<Rc<RefCell<PriceLevel>>>;
+
+        let book_side: &BookSide;
+        let mut order_result = OrderResult {
+            done: Vec::new(),
+            partial: None,
+            quantityFilled: Decimal::zero(),
+        };
+        let mut quantity_left = quantity;
+
+        match side {
+            Side::Ask => {
+                iter = iterate_min;
+                book_side = &self.asks;
+            }
+            Side::Bid => {
+                iter = iterate_max;
+                book_side = &self.bids;
+            }
+        }
+
+        loop {
+            if quantity_left <= Decimal::zero() && book_side.num_orders <= 0 {
+                break;
+            }
+
+            match iter(book_side) {
+                None => break,
+                Some(best_price) => {
+                    let result = self.fill_at_price_level(best_price, quantity_left);
+
+                    order_result.done.copy_from_slice(&result.done);
+                    order_result.quantityFilled += result.quantityFilled;
+                    quantity_left -= result.quantityFilled;
+                }
+            }
+        }
+
+        return order_result;
+    }
+
+    fn fill_at_price_level(
+        &mut self,
+        price_level: Rc<RefCell<PriceLevel>>,
+        quantity: Decimal,
+    ) -> OrderResult {
+        let mut order_result = OrderResult {
+            done: Vec::new(),
+            partial: None,
+            quantityFilled: Decimal::zero(),
+        };
+        let price_level = price_level.borrow();
+        let mut quantity_left = quantity;
+
+        while quantity_left > Decimal::zero() && price_level.len() > 0 {
+            if let Some(head) = price_level.front() {
+                if quantity_left < head.quantity {
+                    head.quantity -= quantity_left;
+                    quantity_left = Decimal::zero();
+                } else {
+                    match self.remove(head.id) {
+                        Some(order) => {
+                            quantity_left -= head.quantity;
+                            order_result.done.push(order)
+                        }
+                        None => {
+                            // This should never happen
+                        }
+                    }
+                }
+            }
+        }
+
+        return order_result;
+    }
 
     // This will go away eventually since we really just want to process market and limit orders.
     pub fn append(&mut self, order: Order) {
