@@ -13,28 +13,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 
 [[package]]
-name = "intrusive-collections"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bca8c0bb831cd60d4dda79a58e3705ca6eb47efb65d665651a8d672213ec3db"
-dependencies = [
- "memoffset",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2f96b10ec2560088a8e76961b00d47107b3a625fecb76dedb29ee7ccbf98235"
-
-[[package]]
-name = "memoffset"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "043175f069eda7b85febe4a74abbaeff828d9f8b448515d3151a14a3542811aa"
-dependencies = [
- "autocfg",
-]
 
 [[package]]
 name = "num-traits"
@@ -46,10 +28,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "obi"
+name = "orderbook"
 version = "0.1.0"
 dependencies = [
- "intrusive-collections",
  "rbtree",
  "rust_decimal",
  "uuid",

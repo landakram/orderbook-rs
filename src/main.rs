@@ -57,13 +57,7 @@ impl PriceLevel {
 
     pub fn remove(&mut self, order: Order) -> Option<Order> {
         self.volume -= order.quantity;
-        if let Some(pos) = self.orders.iter().position(|&o| {
-            println!("{:#?}", o);
-            println!("{:#?}", order);
-            println!("{}", o == order);
-            return o == order;
-        }) {
-            println!("pos {}", pos);
+        if let Some(pos) = self.orders.iter().position(|&o| o == order) {
             return self.orders.remove(pos);
         }
 
@@ -274,9 +268,6 @@ impl OrderBook {
                 Some(best_price) => {
                     let result = self.fill_at_price_level(best_price, quantity_left);
 
-                    println!("a fill");
-                    println!("{:#?}", result);
-
                     order_result.done.extend(&result.done);
                     order_result.quantity_filled += result.quantity_filled;
                     quantity_left -= result.quantity_filled;
@@ -299,20 +290,13 @@ impl OrderBook {
         };
         let mut quantity_left = quantity;
 
-        println!("starting quantity {}", quantity_left);
-        println!("price level {:#?}", price_level.borrow());
-
         while quantity_left > Decimal::zero() && price_level.borrow().len() > 0 {
-            println!("quantity_left {}", quantity_left);
-
             let mut remove_id: Option<Uuid> = None;
 
             {
                 let mut price_level = price_level.borrow_mut();
                 if let Some(head) = price_level.front() {
                     if quantity_left < head.quantity {
-                        println!("filling");
-
                         let mut o = head.clone();
                         o.quantity -= quantity_left;
 
@@ -353,9 +337,6 @@ impl OrderBook {
                     }
                 }
             }
-
-            println!("quantity left end {}", quantity_left);
-            println!("price level len end {}", price_level.borrow().len());
         }
 
         return order_result;
@@ -376,9 +357,6 @@ impl OrderBook {
     }
 
     pub fn remove(&mut self, id: Uuid) -> Option<Order> {
-        println!("remove");
-        println!("{}", id);
-        println!("{:#?}", self.orders);
         if let Some(order) = self.orders.remove(&id) {
             match order.side {
                 Side::Ask => {
@@ -420,8 +398,6 @@ fn main() {
         time::Instant::now(),
     );
     order_book.append(order3);
-
-    println!("{:#?}", order_book);
 
     println!("Submitting market order...");
 
