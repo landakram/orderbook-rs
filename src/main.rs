@@ -146,13 +146,26 @@ impl BookSide {
     }
 
     pub fn remove(&mut self, order: Order) -> Option<Order> {
+        let mut result = None;
+        let mut remove_price_level = false;
+
         if let Some(price_level) = self.prices.get(&order.price) {
             self.num_orders -= 1;
             let mut price_level = price_level.borrow_mut();
-            return price_level.remove(order);
+            result = price_level.remove(order);
+
+            if price_level.len() <= 0 {
+                remove_price_level = true;
+            }
         }
 
-        return None;
+        if remove_price_level {
+            self.prices.remove(&order.price);
+            self.price_tree.remove(&order.price);
+            self.depth -= 1;
+        }
+
+        return result;
     }
 
     pub fn min_price_level(&self) -> Option<Rc<RefCell<PriceLevel>>> {
@@ -183,9 +196,23 @@ struct OrderBook {
     asks: BookSide,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum FillStatus {
+    Full,
+    Partial,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+struct Fill {
+    order_id: Uuid,
+    status: FillStatus,
+    price: Decimal,
+    quantity: Decimal,
+}
+
 #[derive(Debug)]
 struct OrderResult {
-    done: Vec<Order>,
+    done: Vec<Fill>,
     partial: Option<Order>,
     quantity_filled: Decimal,
 }
@@ -207,13 +234,13 @@ impl OrderBook {
         };
     }
 
-    fn side_to_book_side(&self, side: Side) -> &BookSide {
+    fn other_book_side(&self, side: Side) -> &BookSide {
         match side {
             Side::Ask => {
-                return &self.asks;
+                return &self.bids;
             }
             Side::Bid => {
-                return &self.bids;
+                return &self.asks;
             }
         }
     }
@@ -229,23 +256,26 @@ impl OrderBook {
         let mut quantity_left = quantity;
 
         match side {
-            Side::Ask => {
+            Side::Bid => {
                 iter = iterate_min;
             }
-            Side::Bid => {
+            Side::Ask => {
                 iter = iterate_max;
             }
         }
 
         loop {
-            if quantity_left <= Decimal::zero() || self.side_to_book_side(side).num_orders <= 0 {
+            if quantity_left <= Decimal::zero() || self.other_book_side(side).num_orders <= 0 {
                 break;
             }
 
-            match iter(self.side_to_book_side(side)) {
+            match iter(self.other_book_side(side)) {
                 None => break,
                 Some(best_price) => {
                     let result = self.fill_at_price_level(best_price, quantity_left);
+
+                    println!("a fill");
+                    println!("{:#?}", result);
 
                     order_result.done.extend(&result.done);
                     order_result.quantity_filled += result.quantity_filled;
@@ -269,16 +299,34 @@ impl OrderBook {
         };
         let mut quantity_left = quantity;
 
+        println!("starting quantity {}", quantity_left);
+        println!("price level {:#?}", price_level.borrow());
+
         while quantity_left > Decimal::zero() && price_level.borrow().len() > 0 {
+            println!("quantity_left {}", quantity_left);
+
             let mut remove_id: Option<Uuid> = None;
 
             {
                 let mut price_level = price_level.borrow_mut();
                 if let Some(head) = price_level.front() {
                     if quantity_left < head.quantity {
+                        println!("filling");
+
                         let mut o = head.clone();
                         o.quantity -= quantity_left;
+
                         price_level.replace_front(o);
+                        self.orders.insert(o.id, o);
+
+                        order_result.done.push(Fill {
+                            order_id: o.id,
+                            status: FillStatus::Partial,
+                            price: o.price,
+                            quantity: quantity_left,
+                        });
+                        order_result.quantity_filled += quantity_left;
+
                         quantity_left = Decimal::zero();
                     } else {
                         remove_id = Some(head.id);
@@ -289,8 +337,15 @@ impl OrderBook {
             if let Some(id) = remove_id {
                 match self.remove(id) {
                     Some(order) => {
+                        order_result.done.push(Fill {
+                            order_id: order.id,
+                            status: FillStatus::Full,
+                            price: order.price,
+                            quantity: order.quantity,
+                        });
+                        order_result.quantity_filled += order.quantity;
+
                         quantity_left -= order.quantity;
-                        order_result.done.push(order)
                     }
                     None => {
                         println!("this should never happen");
@@ -299,7 +354,8 @@ impl OrderBook {
                 }
             }
 
-            println!("{}", quantity_left);
+            println!("quantity left end {}", quantity_left);
+            println!("price level len end {}", price_level.borrow().len());
         }
 
         return order_result;
@@ -369,7 +425,7 @@ fn main() {
 
     println!("Submitting market order...");
 
-    let result = order_book.submit_market_order(Side::Bid, Decimal::new(500, 2));
+    let result = order_book.submit_market_order(Side::Bid, Decimal::new(2000, 2));
 
     println!("{:#?}", result);
     println!("{:#?}", order_book);
