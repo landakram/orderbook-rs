@@ -62,17 +62,6 @@ impl OrderBook {
         };
     }
 
-    fn other_book_side(&self, side: Side) -> &BookSide {
-        match side {
-            Side::Ask => {
-                return &self.bids;
-            }
-            Side::Bid => {
-                return &self.asks;
-            }
-        }
-    }
-
     pub fn submit_market_order(&mut self, side: Side, quantity: Decimal) -> OrderResult {
         let iter: fn(&BookSide) -> Option<Rc<RefCell<PriceLevel>>>;
 
@@ -172,6 +161,32 @@ impl OrderBook {
         order_result
     }
 
+    pub fn remove(&mut self, id: Uuid) -> Option<Order> {
+        if let Some(order) = self.orders.remove(&id) {
+            match order.side {
+                Side::Ask => {
+                    return self.asks.remove(order);
+                }
+                Side::Bid => {
+                    return self.bids.remove(order);
+                }
+            }
+        }
+
+        return None;
+    }
+
+    fn other_book_side(&self, side: Side) -> &BookSide {
+        match side {
+            Side::Ask => {
+                return &self.bids;
+            }
+            Side::Bid => {
+                return &self.asks;
+            }
+        }
+    }
+
     fn fill_at_price_level(
         &mut self,
         price_level: Rc<RefCell<PriceLevel>>,
@@ -248,8 +263,7 @@ impl OrderBook {
         return order_result;
     }
 
-    // This will go away eventually since we really just want to process market and limit orders.
-    pub fn append(&mut self, order: Order) {
+    fn append(&mut self, order: Order) {
         self.orders.insert(order.id, order);
 
         match order.side {
@@ -260,20 +274,5 @@ impl OrderBook {
                 self.bids.append(order);
             }
         }
-    }
-
-    pub fn remove(&mut self, id: Uuid) -> Option<Order> {
-        if let Some(order) = self.orders.remove(&id) {
-            match order.side {
-                Side::Ask => {
-                    return self.asks.remove(order);
-                }
-                Side::Bid => {
-                    return self.bids.remove(order);
-                }
-            }
-        }
-
-        return None;
     }
 }
