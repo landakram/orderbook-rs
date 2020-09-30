@@ -42,10 +42,6 @@ impl PriceLevel {
         return self.orders.front();
     }
 
-    pub fn back(&self) -> Option<&Order> {
-        return self.orders.back();
-    }
-
     pub fn replace_front(&mut self, order: Order) {
         let mut quantity = dec!(0);
 
@@ -63,11 +59,7 @@ impl PriceLevel {
         self.volume += order.quantity;
     }
 
-    pub fn front_mut(&mut self) -> Option<&mut Order> {
+    fn front_mut(&mut self) -> Option<&mut Order> {
         return self.orders.front_mut();
-    }
-
-    pub fn back_mut(&mut self) -> Option<&mut Order> {
-        return self.orders.back_mut();
     }
 }
