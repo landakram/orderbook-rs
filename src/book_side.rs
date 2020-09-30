@@ -43,6 +43,7 @@ impl BookSide {
         let mut price_level = price_level.borrow_mut();
         price_level.append(order);
         self.num_orders += 1;
+        self.volume += order.quantity;
     }
 
     pub fn remove(&mut self, order: Order) -> Option<Order> {
@@ -51,6 +52,7 @@ impl BookSide {
 
         if let Some(price_level) = self.prices.get(&order.price) {
             self.num_orders -= 1;
+            self.volume -= order.quantity;
             let mut price_level = price_level.borrow_mut();
             result = price_level.remove(order);
 

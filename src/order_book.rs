@@ -191,11 +191,23 @@ impl OrderBook {
                 let mut price_level = price_level.borrow_mut();
                 if let Some(head) = price_level.front() {
                     if quantity_left < head.quantity {
+                        let prev_quantity = head.quantity;
+
                         let mut o = head.clone();
                         o.quantity -= quantity_left;
 
                         price_level.replace_front(o);
                         self.orders.insert(o.id, o);
+                        match o.side {
+                            Side::Ask => {
+                                self.asks.volume -= prev_quantity;
+                                self.asks.volume += o.quantity;
+                            }
+                            Side::Bid => {
+                                self.bids.volume -= prev_quantity;
+                                self.bids.volume += o.quantity;
+                            }
+                        }
 
                         order_result.done.push(Fill {
                             order_id: o.id,
