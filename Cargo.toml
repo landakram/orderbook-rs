@@ -5,6 +5,7 @@ authors = ["Mark Hudnall <me@markhudnall.com>"]
 edition = "2018"
 
 [dependencies]
+rust_decimal_macros = "1.8.1"
 rust_decimal = "1.8.1"
 rbtree = "0.1"
 uuid = { version = "0.5.1", features = ["serde", "v4"] }

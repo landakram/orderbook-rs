@@ -1,5 +1,6 @@
 use rbtree::RBTree;
 use rust_decimal::prelude::*;
+use rust_decimal_macros::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -21,7 +22,7 @@ impl BookSide {
         return BookSide {
             prices: HashMap::new(),
             price_tree: RBTree::new(),
-            volume: Decimal::new(0, 0),
+            volume: dec!(0),
             num_orders: 0,
             depth: 0,
         };

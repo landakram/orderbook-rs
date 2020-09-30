@@ -1,4 +1,5 @@
 use rust_decimal::prelude::*;
+use rust_decimal_macros::*;
 use std::collections::VecDeque;
 
 use crate::order::Order;
@@ -13,7 +14,7 @@ pub struct PriceLevel {
 impl PriceLevel {
     pub fn new(price: Decimal) -> Self {
         return PriceLevel {
-            volume: Decimal::new(0, 0),
+            volume: dec!(0),
             price: price,
             orders: VecDeque::new(),
         };
@@ -46,7 +47,7 @@ impl PriceLevel {
     }
 
     pub fn replace_front(&mut self, order: Order) {
-        let mut quantity = Decimal::zero();
+        let mut quantity = dec!(0);
 
         if let Some(o) = self.front_mut() {
             quantity = o.quantity;
