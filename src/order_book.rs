@@ -2,6 +2,7 @@ use rust_decimal::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time;
 use uuid::Uuid;
 
 use crate::book_side::BookSide;
@@ -42,6 +43,14 @@ fn iterate_min(side: &BookSide) -> Option<Rc<RefCell<PriceLevel>>> {
 
 fn iterate_max(side: &BookSide) -> Option<Rc<RefCell<PriceLevel>>> {
     return side.max_price_level();
+}
+
+fn greater_than_or_equal(left: Decimal, right: Decimal) -> bool {
+    left >= right
+}
+
+fn less_than_or_equal(left: Decimal, right: Decimal) -> bool {
+    left <= right
 }
 
 impl OrderBook {
@@ -101,6 +110,66 @@ impl OrderBook {
         }
 
         return order_result;
+    }
+
+    pub fn submit_limit_order(
+        &mut self,
+        side: Side,
+        quantity: Decimal,
+        price: Decimal,
+    ) -> OrderResult {
+        let iter: fn(&BookSide) -> Option<Rc<RefCell<PriceLevel>>>;
+        let comparator: fn(Decimal, Decimal) -> bool;
+
+        let mut order_result = OrderResult {
+            done: Vec::new(),
+            partial: None,
+            quantity_filled: Decimal::zero(),
+        };
+        let mut quantity_left = quantity;
+
+        match side {
+            Side::Bid => {
+                iter = iterate_min;
+                comparator = greater_than_or_equal;
+            }
+            Side::Ask => {
+                iter = iterate_max;
+                comparator = less_than_or_equal;
+            }
+        }
+
+        loop {
+            match iter(self.other_book_side(side)) {
+                None => break,
+                Some(best_price) => {
+                    if quantity_left <= Decimal::zero()
+                        || self.other_book_side(side).num_orders <= 0
+                        || !comparator(price, best_price.borrow().price)
+                    {
+                        break;
+                    }
+
+                    let result = self.fill_at_price_level(best_price, quantity_left);
+
+                    order_result.done.extend(&result.done);
+                    order_result.quantity_filled += result.quantity_filled;
+                    quantity_left -= result.quantity_filled;
+                }
+            }
+        }
+
+        // Add the remaining quantity to the book.
+        // Note that we don't implement Time in Force, so the orders are effectively
+        // Good Till Canceled (GTC).
+        if quantity_left > Decimal::zero() {
+            let resting_order = Order::new(side, quantity_left, price, time::Instant::now());
+
+            self.append(resting_order);
+            order_result.partial = Some(resting_order);
+        }
+
+        order_result
     }
 
     fn fill_at_price_level(

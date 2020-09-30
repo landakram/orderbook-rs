@@ -6,8 +6,8 @@ use crate::order::Order;
 
 #[derive(Debug)]
 pub struct PriceLevel {
-    volume: Decimal,
-    price: Decimal,
+    pub volume: Decimal,
+    pub price: Decimal,
     orders: VecDeque<Order>,
 }
 
