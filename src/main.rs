@@ -1,12 +1,7 @@
-mod book_side;
-mod order;
-mod order_book;
-mod price_level;
-
 use rust_decimal_macros::*;
 
-use order::Side;
-use order_book::OrderBook;
+use orderbook::order::Side;
+use orderbook::OrderBook;
 
 fn main() {
     let mut order_book = OrderBook::new();
