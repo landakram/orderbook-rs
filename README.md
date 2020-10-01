@@ -2,7 +2,7 @@
 
 > An in-memory limit order book and matching engine in Rust.
 
-⚠ **Alpha quality. Untested. Use at your own risk.**
+⚠ **Experimental. Unit tested but never deployed in prod. Use at your own risk.**
 
 ## Features
 

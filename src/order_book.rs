@@ -161,6 +161,10 @@ impl OrderBook {
         order_result
     }
 
+    pub fn get(&self, id: Uuid) -> Option<&Order> {
+        return self.orders.get(&id);
+    }
+
     pub fn remove(&mut self, id: Uuid) -> Option<Order> {
         if let Some(order) = self.orders.remove(&id) {
             match order.side {
@@ -274,5 +278,171 @@ impl OrderBook {
                 self.bids.append(order);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::order::Side;
+    use rust_decimal_macros::*;
+
+    #[test]
+    fn test_submit_market_order() {
+        let mut order_book = OrderBook::new();
+
+        let o1 = order_book.submit_limit_order(Side::Ask, dec!(10.00), dec!(50.00));
+        let o2 = order_book.submit_limit_order(Side::Ask, dec!(10.00), dec!(75.00));
+        let o3 = order_book.submit_limit_order(Side::Ask, dec!(10.00), dec!(75.00));
+
+        let result = order_book.submit_market_order(Side::Bid, dec!(25.00));
+        let mut order_ids = result.done.iter().map(|f| f.order_id);
+
+        // Order was filled with price-time priority
+        assert_eq!(result.quantity_filled, dec!(25.00));
+
+        assert_eq!(order_ids.next(), Some(o1.partial.unwrap().id));
+        assert_eq!(order_ids.next(), Some(o2.partial.unwrap().id));
+        assert_eq!(order_ids.next(), Some(o3.partial.unwrap().id));
+        assert_eq!(order_ids.next(), None);
+
+        // Filled orders were taken off the book
+        assert!(order_book.get(o1.partial.unwrap().id).is_none());
+        assert!(order_book.get(o2.partial.unwrap().id).is_none());
+
+        // Partially filled order is still on the book with updated quantity
+        assert_eq!(
+            order_book.get(o3.partial.unwrap().id).unwrap().quantity,
+            dec!(5.00)
+        );
+    }
+
+    #[test]
+    fn test_submit_market_order_partial() {
+        let mut order_book = OrderBook::new();
+
+        let o1 = order_book.submit_limit_order(Side::Ask, dec!(5.00), dec!(50.00));
+
+        let result = order_book.submit_market_order(Side::Bid, dec!(20.00));
+
+        // Order was partially filled
+        assert_eq!(result.quantity_filled, dec!(5.00));
+
+        let mut order_ids = result.done.iter().map(|f| f.order_id);
+        assert_eq!(order_ids.next(), Some(o1.partial.unwrap().id));
+        assert_eq!(order_ids.next(), None);
+
+        // Nothing is left on the book
+        assert_eq!(order_book.orders.len(), 0);
+    }
+
+    #[test]
+    fn test_submit_limit_order() {
+        let mut order_book = OrderBook::new();
+
+        let o1 = order_book.submit_limit_order(Side::Ask, dec!(5.00), dec!(50.00));
+        let o2 = order_book.submit_limit_order(Side::Ask, dec!(20.00), dec!(51.00));
+
+        let result = order_book.submit_limit_order(Side::Bid, dec!(15.00), dec!(52.00));
+
+        // Order was filled with price-time priority
+        assert_eq!(result.quantity_filled, dec!(15.00));
+
+        let mut order_ids = result.done.iter().map(|f| f.order_id);
+        assert_eq!(order_ids.next(), Some(o1.partial.unwrap().id));
+        assert_eq!(order_ids.next(), Some(o2.partial.unwrap().id));
+        assert_eq!(order_ids.next(), None);
+
+        // Filled orders were taken off the book
+        assert!(order_book.get(o1.partial.unwrap().id).is_none());
+
+        // Partially filled order is still on the book with updated quantity
+        assert_eq!(
+            order_book.get(o2.partial.unwrap().id).unwrap().quantity,
+            dec!(10.00)
+        );
+    }
+
+    #[test]
+    fn test_submit_limit_order_partial() {
+        let mut order_book = OrderBook::new();
+
+        let o1 = order_book.submit_limit_order(Side::Ask, dec!(5.00), dec!(50.00));
+        let _o2 = order_book.submit_limit_order(Side::Ask, dec!(20.00), dec!(60.00));
+
+        let result = order_book.submit_limit_order(Side::Bid, dec!(15.00), dec!(55.00));
+
+        // Order was partially filled
+        assert_eq!(result.quantity_filled, dec!(5.00));
+
+        let mut order_ids = result.done.iter().map(|f| f.order_id);
+        assert_eq!(order_ids.next(), Some(o1.partial.unwrap().id));
+        assert_eq!(order_ids.next(), None);
+
+        // Filled orders were taken off the book
+        assert!(order_book.get(o1.partial.unwrap().id).is_none());
+
+        // New order for partial quantity was added to the book
+        assert_eq!(
+            order_book.get(result.partial.unwrap().id).unwrap().quantity,
+            dec!(10.00)
+        );
+    }
+
+    #[test]
+    fn test_submit_limit_order_no_fill() {
+        let mut order_book = OrderBook::new();
+
+        let _o1 = order_book.submit_limit_order(Side::Ask, dec!(5.00), dec!(50.00));
+
+        let result = order_book.submit_limit_order(Side::Bid, dec!(5.00), dec!(40.00));
+
+        // Order was not filled
+        assert_eq!(result.done.len(), 0);
+
+        // Order is now resting on the book
+        assert_eq!(
+            order_book.get(result.partial.unwrap().id).unwrap().quantity,
+            dec!(5.00)
+        );
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut order_book = OrderBook::new();
+
+        let _o1 = order_book.submit_limit_order(Side::Ask, dec!(5.00), dec!(50.00));
+        let o2 = order_book.submit_limit_order(Side::Bid, dec!(5.00), dec!(40.00));
+
+        let result = order_book.remove(o2.partial.unwrap().id);
+
+        // Order was removed
+        assert_eq!(result.unwrap().id, o2.partial.unwrap().id);
+
+        // Order is no longer on the book
+        assert_eq!(order_book.get(result.unwrap().id), None);
+    }
+
+    #[test]
+    fn test_get() {
+        let mut order_book = OrderBook::new();
+
+        let result = order_book.submit_limit_order(Side::Ask, dec!(5.00), dec!(50.00));
+
+        // Gets an order on the book
+        assert_eq!(
+            order_book.get(result.partial.unwrap().id).map(|&o| o),
+            result.partial
+        );
+    }
+
+    #[test]
+    fn test_get_no_order() {
+        let order_book = OrderBook::new();
+
+        let id = Uuid::new_v4();
+
+        // Returns None for a bogus ID
+        assert_eq!(order_book.get(id), None);
     }
 }

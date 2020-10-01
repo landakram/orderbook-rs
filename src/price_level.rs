@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use crate::order::Order;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct PriceLevel {
     pub volume: Decimal,
     pub price: Decimal,
@@ -61,5 +61,79 @@ impl PriceLevel {
 
     fn front_mut(&mut self) -> Option<&mut Order> {
         return self.orders.front_mut();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::order::Side;
+    use std::time;
+
+    #[test]
+    fn test_append() {
+        let mut price_level = PriceLevel::new(dec!(10.00));
+        let order = Order::new(Side::Ask, dec!(1.0), dec!(10.00), time::Instant::now());
+
+        price_level.append(order);
+
+        assert_eq!(price_level.volume, order.quantity);
+        assert_eq!(*price_level.front().unwrap(), order);
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut price_level = PriceLevel::new(dec!(10.00));
+        let order = Order::new(Side::Ask, dec!(1.0), dec!(10.00), time::Instant::now());
+        let order2 = Order::new(Side::Ask, dec!(2.0), dec!(10.00), time::Instant::now());
+
+        price_level.append(order);
+        price_level.append(order2);
+
+        price_level.remove(order);
+
+        assert_eq!(price_level.volume, order2.quantity);
+        assert_eq!(*price_level.front().unwrap(), order2);
+    }
+
+    #[test]
+    fn test_len() {
+        let mut price_level = PriceLevel::new(dec!(10.00));
+        let order = Order::new(Side::Ask, dec!(1.0), dec!(10.00), time::Instant::now());
+        let order2 = Order::new(Side::Ask, dec!(2.0), dec!(10.00), time::Instant::now());
+
+        price_level.append(order);
+        price_level.append(order2);
+
+        assert_eq!(price_level.len(), 2);
+    }
+
+    #[test]
+    fn test_front() {
+        let mut price_level = PriceLevel::new(dec!(10.00));
+        let order = Order::new(Side::Ask, dec!(1.0), dec!(10.00), time::Instant::now());
+        let order2 = Order::new(Side::Ask, dec!(2.0), dec!(10.00), time::Instant::now());
+
+        price_level.append(order);
+        price_level.append(order2);
+
+        assert_eq!(*price_level.front().unwrap(), order);
+    }
+
+    #[test]
+    fn test_replace_front() {
+        let mut price_level = PriceLevel::new(dec!(10.00));
+        let order = Order::new(Side::Ask, dec!(1.0), dec!(10.00), time::Instant::now());
+        let order2 = Order::new(Side::Ask, dec!(2.0), dec!(10.00), time::Instant::now());
+
+        price_level.append(order);
+        price_level.append(order2);
+
+        let mut new_order = order.clone();
+        new_order.quantity = dec!(0.1);
+
+        price_level.replace_front(new_order);
+        assert_eq!(*price_level.front().unwrap(), new_order);
+        assert_eq!(price_level.volume, new_order.quantity + order2.quantity);
     }
 }
